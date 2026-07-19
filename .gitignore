@@ -1,0 +1,6 @@
+node_modules/
+GIMP 2/
+ffmpeg/
+temp_saved_game.json
+*.log
+*.zip

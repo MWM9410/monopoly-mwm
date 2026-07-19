@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>网页大富翁</title>
+  <link rel="icon" href="/drawable/touzi/t1.png">
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+  <div id="app">
+    <!-- 网络连接界面（房间列表） -->
+    <div id="connectScreen" class="screen" style="display:flex;flex-direction:column;align-items:center;height:100vh;background:#1a1a2e;color:#fff;">
+      <h1 style="font-size:28px;margin:16px 0 4px;">🎲 网页大富翁</h1>
+      <p style="color:#888;margin:0 0 12px;font-size:14px;">和朋友一起远程联机</p>
+      <input id="signalUrlInput" type="text" placeholder="信号服务器地址" style="width:260px;padding:8px;border-radius:8px;border:1px solid #444;background:#16213e;color:#fff;text-align:center;font-size:13px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;width:260px;margin-bottom:12px;">
+        <button id="createRoomBtn" style="flex:1;padding:12px 0;border-radius:8px;background:#e94560;color:#fff;border:none;font-size:16px;cursor:pointer;">创建房间</button>
+      </div>
+      <p id="connectStatus" style="text-align:center;color:#e94560;font-size:13px;margin:0 0 8px;min-height:20px;"></p>
+      <p id="roomCodeDisplay" style="text-align:center;color:#4ecca3;font-size:18px;font-weight:bold;margin:0 0 8px;min-height:28px;"></p>
+      <div style="width:100%;max-width:340px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:#888;font-size:14px;">房间列表</span>
+      </div>
+      <div id="roomList" style="flex:1;width:100%;max-width:340px;overflow-y:auto;padding:8px 16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="text-align:center;color:#666;padding:40px 0;font-size:14px;">正在获取房间列表...</div>
+      </div>
+    </div>
+
+    <div id="lobby" class="screen hidden">
+      <div class="lobby-container">
+        <div id="characterGrid">
+          <div class="char-main-grid">
+            <div class="char-box" data-char="hong1" data-color="hong"><img src="/drawable/juese/hong1.png" alt="红"><div class="select-ring"></div></div>
+            <div class="char-box" data-char="cheng1" data-color="cheng"><img src="/drawable/juese/cheng1.png" alt="橙"><div class="select-ring"></div></div>
+            <div class="char-box" data-char="huang1" data-color="huang"><img src="/drawable/juese/huang1.png" alt="黄"><div class="select-ring"></div></div>
+            <div class="char-box" data-char="lv1" data-color="lv"><img src="/drawable/juese/lv1.png" alt="绿"><div class="select-ring"></div></div>
+            <div class="char-box" data-char="lan1" data-color="lan"><img src="/drawable/juese/lan1.png" alt="蓝"><div class="select-ring"></div></div>
+            <div class="char-box" data-char="zi1" data-color="zi"><img src="/drawable/juese/zi1.png" alt="紫"><div class="select-ring"></div></div>
+          </div>
+          <div id="charExpandRow" class="char-expand-row hidden"></div>
+        </div>
+        
+        <div class="lobby-controls">
+          <input type="text" id="playerNameInput" class="hidden" placeholder="输入名字" maxlength="8">
+          <div class="lobby-btn-row">
+            <button id="startBtn" disabled>开始游戏</button>
+            <button id="quickStartBtn">一键开始</button>
+          </div>
+          <div id="saveBtnRow" class="hidden lobby-btn-row">
+            <button id="loadGameBtn">载入游戏</button>
+            <button id="deleteSaveBtn">删除存档</button>
+          </div>
+        </div>
+        
+        <div id="playerList"></div>
+      </div>
+    </div>
+    <div id="game" class="screen hidden">
+      <div id="s1Area">
+        <header>
+          <div id="settingsWrapper" class="hidden" style="position:relative;margin-right:auto;display:flex;align-items:center;gap:4px;">
+            <button id="settingsBtn" style="padding:6px 16px;background:#000;color:#888;border:none;border-radius:6px;cursor:pointer;font-size:12px;">设置</button>
+            <button id="testDiceBtn" style="padding:6px 16px;background:#000;color:#888;border:none;border-radius:6px;cursor:pointer;font-size:12px;">测骰</button>
+            <div id="settingsDropdown" class="hidden" style="position:absolute;top:100%;left:0;background:#fff;border-radius:6px;padding:8px;z-index:151;display:grid;grid-template-columns:1fr 1fr;gap:4px;min-width:300px;">
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <button id="restartBtn2" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">重新开始</button>
+                <button id="saveGameBtn3" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">保存游戏</button>
+                <button id="cardsAndPropertiesBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">卡片地产</button>
+                <button id="flipAllPetBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">翻面</button>
+                <button id="clearBugBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">清理BUG</button>
+                <button id="consoleBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">控制台</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <button id="testPetBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">测宠</button>
+                <button id="testJiyuBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">测试机遇</button>
+                <button id="testSansiBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">测试三思</button>
+                <button id="testFreezeBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">冻结</button>
+                <button id="testQiyuBtn" style="background:#fff;color:#000;border:none;border-radius:6px;padding:8px 24px;cursor:pointer;font-size:clamp(14px,3.5vw,20px);width:100%;text-align:center;white-space:nowrap;">测试奇遇</button>
+              </div>
+            </div>
+          </div>
+          <span id="roundDisplay" style="position:absolute;left:50%;transform:translateX(-50%);color:#888;font-size:16px;"></span>
+          <button id="emojiBtn" class="hidden">表情包</button>
+        </header>
+        <div id="playerInfoPanel"></div>
+        <div id="gameContainer">
+          <div id="hArea">
+            <div id="board"></div>
+            <div id="tipOverlay"></div>
+            <div id="tckOverlay"></div>
+          </div>
+        </div>
+      </div>
+      <div id="s2Area">
+        <div id="actionBar">
+          <div id="tipContainer"></div>
+          <div id="areaE"></div>
+        </div>
+      </div>
+      <div id="bottomBar">
+        <div id="areaD"></div>
+        <div id="areaF">
+          <div id="jailActions" class="hidden"></div>
+          <div id="actionArea" class="hidden">
+            <p id="buyInfo"></p>
+            <button id="buyBtn">购买地产</button>
+            <button id="skipBtn">放弃</button>
+          </div>
+        </div>
+        <div id="areaG"></div>
+      </div>
+    </div>
+  </div>
+  <!-- 游戏引擎（必须先加载：提供 polyfill + socket.io mock） -->
+  <script src="game-engine.js"></script>
+  <!-- 将 polyfill 的 require 暴露为全局变量 -->
+  <script>var require = window.require; var process = window.process; var __dirname = '.';</script>
+  <!-- 服务器逻辑转换版（游戏状态、函数、socket处理器，依赖 polyfill） -->
+  <script src="server-browser.js"></script>
+  <!-- WebRTC 网络层 -->
+  <script src="game-net.js"></script>
+  <!-- UI 层 -->
+  <script src="game.js?v=10"></script>
+</body>
+</html>

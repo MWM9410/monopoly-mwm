@@ -1,9 +1,4 @@
 name = "monopoly-signal"
 main = "signal-worker.js"
 compatibility_date = "2024-09-23"
-
-# 如果有多实例需要共享房间状态，启用 Durable Objects
-# 免费版单实例足够家庭/朋友联机使用
-
-[observability]
-enabled = true
+compatibility_flags = ["nodejs_compat"]

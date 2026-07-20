@@ -83,12 +83,6 @@ const socket = {
     } catch (e) {}
     return _autoSignalUrl;
   }
-    // 生产环境强制 wss（HTTPS 页面不允许 ws）
-    if (url.startsWith('ws://') && !/localhost|127\.0\.0\.1|192\.168\./.test(url)) {
-      url = 'wss://' + url.slice(5);
-    }
-    return url;
-  }
 
   function setStatus(msg, isError) {
     connectStatus.textContent = msg;

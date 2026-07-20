@@ -1,0 +1,60 @@
+从你提供的构建日志来看，部署失败的根本原因是 package.json与 package-lock.json不同步，导致 Cloudflare 构建环境执行严格的 npm ci命令时校验失败。
+
+核心报错信息：
+
+npm error code EUSAGE
+
+npm error npm ci can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with npm install before continuing.
+
+npm error Missing: wrangler@3.114.17 from lock file（以及大量其他依赖 Missing）
+
+问题原因分析
+
+Lock 文件缺失或不完整：日志显示 wrangler、miniflare、esbuild等 Cloudflare Worker 必需的依赖在 package-lock.json中“Missing”，说明这个 lock 文件可能没有正确提交到 Git，或者是你本地用 npm install修改了 package.json后没有重新生成 lock 文件。
+
+npm ci的特性：Cloudflare Pages/Workers 构建默认使用 npm ci，它要求环境干净且 package-lock.json必须与 package.json严格一致，不会像 npm install那样自动修正 lock 文件，一旦不一致就直接报错退出。
+
+可能的误操作：如果你之前为了“免绑卡/纯前端”删减过 package.json里的依赖（比如删掉了服务端相关的包）但没有重新生成 lock 文件，或者 .gitignore里误屏蔽了 package-lock.json，都会导致线上构建时找不到依赖。
+
+解决步骤（在本地项目目录执行）
+
+请在你的本地仓库执行以下命令修复并重新推送：
+
+删除旧的 lock 文件与依赖（确保从头生成一致的依赖树）：
+
+bash
+rm package-lock.json
+rm -rf node_modules
+
+重新安装依赖（根据当前的 package.json生成全新的 package-lock.json）：
+
+bash
+npm install
+
+注：如果你的 package.json里确实不需要那些报 Missing 的包（比如你现在是纯前端只需 wrangler作部署工具），npm install会按当前配置重新锁定正确版本。
+
+本地验证（确保新 lock 文件能被 npm ci识别，模拟线上环境）：
+
+bash
+npm ci
+
+如果这一步在本地不报错，说明同步成功。
+
+提交并推送更改（务必把新生成的 package-lock.json加入 Git 并推送到仓库）：
+
+bash
+git add package-lock.json package.json
+git commit -m "fix: regenerate package-lock.json to sync with package.json"
+git push
+
+重新触发 Cloudflare 部署：在 Cloudflare Pages/Workers 控制台重新触发一次构建，或者等 Git push 自动触发。
+
+额外检查点
+
+确认你的仓库里 没有​ 在 .gitignore里忽略 package-lock.json，Cloudflare 构建必须依赖这个文件来实现确定性安装。
+
+如果你这个项目实际上是 Cloudflare Workers（信令服务）​ 而非 Pages 静态站点，确保在 Cloudflare 控制台里的“构建命令”设置正确（Workers 通常直接用 npx wrangler deploy，不一定需要 npm ci前置，除非你在 package.json的 build脚本里写了；但如果是在 Pages 里部署 Worker 兼容模式，则会走安装依赖流程）。
+
+按上面的步骤修复 lock 文件同步问题后，构建应该就能通过了。
+
+需要我帮你核对一下当前 package.json里是否残留了已被删除的服务端依赖，导致 npm install仍试图去找那些 Missing 的包吗？

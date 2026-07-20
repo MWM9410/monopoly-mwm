@@ -31,10 +31,12 @@ function bindWs(server, rooms, roomMetas, allClients) {
         room.members.push(server);
         room.meta.playerCount = room.members.length;
         roomMetas.set(msg.code, { code: msg.code, playerCount: room.members.length });
-        info.curRoom = msg.code; info.curRole = 'peer';
-        send(server, { type: 'room_joined', code: msg.code });
+                info.curRoom = msg.code; info.curRole = 'peer';
+        send(server, { type: 'room_joined', code: msg.code, memberCount: room.members.length });
         broadcast(room.members, { type: 'peer_joined', memberCount: room.members.length }, server);
         sync(); break;
+
+
       }
       case 'offer': { const r = rooms.get(info.curRoom); if (r) broadcast(r.members, { type: 'offer', sdp: msg.sdp }, server); break; }
       case 'answer': { const r = rooms.get(info.curRoom); if (r) broadcast(r.members, { type: 'answer', sdp: msg.sdp }, server); break; }

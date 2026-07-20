@@ -56,8 +56,6 @@ const socket = {
   const lobby = $('lobby');
   //const signalUrlInput = $('signalUrlInput');
   const createRoomBtn = $('createRoomBtn');
-  const roomCodeInput = $('roomCodeInput');
-  const joinRoomBtn = $('joinRoomBtn');
   const roomListEl = $('roomList');
   const connectStatus = $('connectStatus');
   const roomCodeDisplay = $('roomCodeDisplay');
@@ -91,8 +89,7 @@ const socket = {
     const match = location.hash.match(/room=([A-Z0-9]{5})/i);
     if (match) {
       const code = match[1].toUpperCase();
-      roomCodeInput.value = code;
-      setStatus('检测到房间码: ' + code + '，点击"加入"');
+      joinRoom(code);
     }
   })();
 
@@ -164,7 +161,7 @@ const socket = {
       });
 
       showLobby();
-      updateLobbyTopBar(code, 1);
+      updateLobbyTopBar(code, channel.memberCount || 1);
       setTimeout(() => {
         const handlers = clientSocket._handlers['connect'] || [];
         for (const h of handlers) h();
@@ -185,17 +182,6 @@ const socket = {
       }
     }
   }
-
-  // 手动输入房间码加入
-  joinRoomBtn.addEventListener('click', () => {
-    const code = roomCodeInput.value.trim().toUpperCase();
-    if (code.length !== 5) { setStatus('请输入5位房间码', true); return; }
-    location.hash = 'room=' + code;
-    joinRoom(code);
-  });
-  roomCodeInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') joinRoomBtn.click();
-  });
 
   // ── 创建房间 ──
   createRoomBtn.addEventListener('click', async () => {

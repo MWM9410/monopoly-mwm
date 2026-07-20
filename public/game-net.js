@@ -178,6 +178,7 @@ const GameNet = {
         switch (msg.type) {
           case 'room_joined': {
             console.log('[Join] room_joined, starting WebRTC...');
+            result.memberCount = msg.memberCount;
             rtcPC = new RTCPeerConnection(C.RTC_CONFIG);
             const dc = rtcPC.createDataChannel('game');
             dc.onopen = () => {

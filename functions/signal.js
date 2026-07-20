@@ -1,11 +1,14 @@
-// Pages Function - 信令服务器 (WebSocket)
+// Pages Function - 信令服务器 (WebSocket + Cache API 跨隔离共享)
 const ROOM_CODE_LENGTH = 5;
 const rooms = new Map();
 const roomMetas = new Map();
 const allClients = new Set();
+const CACHE_NAME = 'monopoly-rooms';
+const ROOM_LIST_KEY = 'https://monopoly.internal/room-list';
 
+// 基础定义
 function send(ws, msg) { try { ws.send(JSON.stringify(msg)); } catch (e) {} }
-function broadcast(room, msg, exclude = null) { for (const m of room.members) { if (m !== exclude) send(m, msg); } }
+function broadcast(room, msg, exclude) { for (const m of room.members) { if (m !== exclude) send(m, msg); } }
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
@@ -13,15 +16,27 @@ function genCode() {
   while (rooms.has(code));
   return code;
 }
-function syncRoomList() {
-  const list = Array.from(roomMetas.values());
+async function cacheGetList() {
+  try { const c = await caches.open(CACHE_NAME); const r = await c.match(ROOM_LIST_KEY); if (r) return await r.json(); } catch (e) {}
+  return [];
+}
+async function cachePutList(list) {
+  try { const c = await caches.open(CACHE_NAME); await c.put(ROOM_LIST_KEY, new Response(JSON.stringify(list), { headers: { 'Cache-Control': 'no-store' } })); } catch (e) {}
+}
+async function syncRoomList() {
+  const cached = await cacheGetList();
+  const merged = new Map();
+  for (const r of cached) merged.set(r.code, r);
+  for (const [c, m] of roomMetas) merged.set(c, { code: c, playerCount: m.playerCount });
+  const list = Array.from(merged.values());
+  await cachePutList(list);
   for (const ws of allClients) { if (ws.readyState === 1) send(ws, { type: 'room_list', rooms: list }); }
 }
 
 function handleConnection(ws) {
   let curRoom = null, curRole = null;
   allClients.add(ws);
-  send(ws, { type: 'room_list', rooms: Array.from(roomMetas.values()) });
+  cacheGetList().then(list => send(ws, { type: 'room_list', rooms: list }));
 
   ws.addEventListener('message', (event) => {
     let msg;
@@ -44,6 +59,7 @@ function handleConnection(ws) {
         if (room.members.length >= 6) { send(ws, { type: 'error', message: 'room_full' }); break; }
         room.members.push(ws);
         room.meta.playerCount = room.members.length;
+        roomMetas.set(msg.code, { code: msg.code, playerCount: room.members.length });
         curRoom = msg.code; curRole = 'peer';
         send(ws, { type: 'room_joined', code: msg.code });
         broadcast(room, { type: 'peer_joined', memberCount: room.members.length }, ws);
@@ -74,6 +90,17 @@ function handleConnection(ws) {
 
 export async function onRequest(context) {
   const { request } = context;
+  const url = new URL(request.url);
+
+  // REST API：房间列表（跨隔离用）
+  if (url.pathname === '/api/rooms' && request.method === 'GET') {
+    const list = await cacheGetList();
+    return new Response(JSON.stringify(list), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+
+  // WebSocket 信令
   const upgradeHeader = request.headers.get('Upgrade');
   if (!upgradeHeader || upgradeHeader !== 'websocket') {
     return new Response('Expected WebSocket', { status: 426 });

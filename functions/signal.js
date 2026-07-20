@@ -4,6 +4,7 @@
 const ROOM_CODE_LENGTH = 5;
 const rooms = new Map();
 const roomMetas = new Map();
+const allClients = new Set(); // 所有连接的客户端（含只看列表的）
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -31,15 +32,13 @@ function getRoomList() {
 
 function syncRoomList() {
   const list = getRoomList();
-  for (const pair of rooms) {
-    const members = pair[1].members;
-    for (const m of members) send(m, { type: 'room_list', rooms: list });
-  }
+  for (const ws of allClients) send(ws, { type: 'room_list', rooms: list });
 }
 
 function handleConnection(ws) {
   let currentRoom = null;
   let currentRole = null;
+  allClients.add(ws);
 
   send(ws, { type: 'room_list', rooms: getRoomList() });
 
@@ -101,6 +100,7 @@ function handleConnection(ws) {
   });
 
   ws.addEventListener('close', () => {
+    allClients.delete(ws);
     if (currentRoom && rooms.has(currentRoom)) {
       const room = rooms.get(currentRoom);
       room.members = room.members.filter(m => m !== ws);
@@ -119,7 +119,7 @@ function handleConnection(ws) {
     }
   });
 
-  ws.addEventListener('error', () => {});
+  ws.addEventListener('error', () => { allClients.delete(ws); });
 }
 
 export async function onRequest(context) {

@@ -1,3 +1,4 @@
+// Durable Object Worker — 只需定义 DO class，供 Pages 绑定
 function send(ws, msg) { try { ws.send(JSON.stringify(msg)); } catch {} }
 function broadcast(members, msg, exclude) { for (const m of members) if (m !== exclude) send(m, msg); }
 function genCode() {
@@ -57,27 +58,20 @@ function bindWs(server, rooms, roomMetas, allClients) {
   server.addEventListener('error', () => { allClients.delete(server); });
 }
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (url.pathname === '/signal') {
-      const upgrade = request.headers.get('Upgrade');
-      if (upgrade !== 'websocket') return new Response('Expected WebSocket', { status: 426 });
-      // 优先使用 Durable Object（跨隔离共享）
-      if (env && env.SIGNAL_ROOM) {
-        try {
-          const id = env.SIGNAL_ROOM.idFromName('global');
-          const stub = env.SIGNAL_ROOM.get(id);
-          return stub.fetch(request);
-        } catch (e) { console.error('DO fail:', e); }
-      }
-      // 回退：当前隔离区 in-memory
-      const pair = new WebSocketPair();
-      const [client, server] = Object.values(pair);
-      server.accept();
-      bindWs(server, new Map(), new Map(), new Set());
-      return new Response(null, { status: 101, webSocket: client });
-    }
-    return env.ASSETS.fetch(request);
+export class SignalRoom {
+  constructor(state, env) {
+    this.state = state;
+    this.rooms = new Map();
+    this.roomMetas = new Map();
+    this.allClients = new Set();
   }
-};
+  async fetch(request) {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    server.accept();
+    bindWs(server, this.rooms, this.roomMetas, this.allClients);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+}
+
+export default { fetch() { return new Response(null, { status: 204 }); } };

@@ -213,15 +213,30 @@ const socket = {
   });
 
   // ── 启动房间列表监听 ──
+  const apiBase = getSignalUrl().replace(/^ws/, 'http').replace(/\/signal$/, '');
+  async function pollRoomList() {
+    try {
+      const res = await fetch(apiBase + '/api/rooms');
+      if (res.ok) {
+        const rooms = await res.json();
+        renderRoomList(rooms);
+        if (currentHost && currentHost.roomCode) {
+          const myRoom = rooms.find(r => r.code === currentHost.roomCode);
+          if (myRoom) updateLobbyTopBar(myRoom.code, myRoom.playerCount);
+        }
+      }
+    } catch (e) {}
+  }
   roomWatcher = GameNet.watchRooms(getSignalUrl());
   roomWatcher.on('update', (rooms) => {
     renderRoomList(rooms);
-    // 如果在 lobby 中，同步更新顶部栏
     if (currentHost && currentHost.roomCode) {
       const myRoom = rooms.find(r => r.code === currentHost.roomCode);
       if (myRoom) updateLobbyTopBar(myRoom.code, myRoom.playerCount);
     }
   });
+  // HTTP 轮询作为跨隔离回退
+  setInterval(pollRoomList, 5000);
 
 })();
 

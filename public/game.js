@@ -62,14 +62,20 @@ const socket = {
 
   // 根据当前页面地址自动推断信号服务器地址
   // 例如页面在 http://192.168.110.68:8080 打开 → ws://192.168.110.68:3001
+  // Cloudflare Pages 部署时使用默认的 Worker 地址
   (function initSignalUrl() {
     try {
       const loc = new URL(location.href);
       if (loc.hostname && loc.hostname !== 'localhost' && loc.hostname !== '127.0.0.1') {
-        // 用页面同 host，端口 3001
-        const proto = (loc.protocol === 'https:' ? 'wss://' : 'ws://');
-        const port = loc.port === '8080' ? '3001' : (loc.port || (proto === 'wss://' ? '443' : '80'));
-        signalUrlInput.value = proto + loc.hostname + ':' + port;
+        // Cloudflare Pages/Woker 部署 → 使用默认 Worker 地址
+        if (loc.hostname.endsWith('pages.dev') || loc.hostname.endsWith('workers.dev')) {
+          signalUrlInput.value = 'wss://monopoly-signal.229344154.workers.dev';
+        } else {
+          // 本地局域网：用页面同 host，端口 3001
+          const proto = (loc.protocol === 'https:' ? 'wss://' : 'ws://');
+          const port = loc.port === '8080' ? '3001' : (loc.port || (proto === 'wss://' ? '443' : '80'));
+          signalUrlInput.value = proto + loc.hostname + ':' + port;
+        }
         signalUrlInput.placeholder = '信号服务器地址（默认 ' + signalUrlInput.value + '）';
       }
     } catch (e) {}

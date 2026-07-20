@@ -89,8 +89,10 @@ const socket = {
     connectStatus.style.color = isError ? '#e94560' : '#4ecca3';
   }
   function updateLobbyTopBar(roomCode, count) {
-    $('#lobbyRoomCode').textContent = roomCode || '--';
-    $('#lobbyPlayerCount').textContent = '👤 ' + (count || 0) + '/6';
+    const rc = $('lobbyRoomCode');
+    const pc = $('lobbyPlayerCount');
+    if (rc) rc.textContent = roomCode || '--';
+    if (pc) pc.textContent = '👤 ' + (count || 0) + '/6';
   }
   function showLobby() {
     connectScreen.style.display = 'none';

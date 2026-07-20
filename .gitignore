@@ -4,3 +4,4 @@ ffmpeg/
 temp_saved_game.json
 *.log
 *.zip
+public/drawable/

@@ -1,8 +1,8 @@
 function send(ws, msg) { try { ws.send(JSON.stringify(msg)); } catch {} }
 function broadcast(members, msg, exclude) { for (const m of members) if (m !== exclude) send(m, msg); }
-function genCode(rooms) {
+function genCode() {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let r; do { r = ''; for (let i = 0; i < 5; i++) r += c[Math.random() * c.length | 0]; } while (rooms.has(r));
+  let r = ''; for (let i = 0; i < 5; i++) r += c[Math.random() * c.length | 0];
   return r;
 }
 
@@ -16,7 +16,7 @@ function bindWs(server, rooms, roomMetas, allClients) {
     switch (msg.type) {
       case 'create_room': {
         if (info.curRoom) return;
-        const code = genCode(rooms);
+        const code = genCode();
         rooms.set(code, { code, members: [server], host: server, meta: { playerCount: 1 } });
         roomMetas.set(code, { code, playerCount: 1 });
         info.curRoom = code; info.curRole = 'host';
@@ -57,52 +57,18 @@ function bindWs(server, rooms, roomMetas, allClients) {
   server.addEventListener('error', () => { allClients.delete(server); });
 }
 
-export class SignalRoom {
-  constructor(state, env) {
-    this.state = state;
-    this.rooms = new Map();
-    this.roomMetas = new Map();
-    this.allClients = new Set();
-  }
-  async fetch(request) {
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-    server.accept();
-    bindWs(server, this.rooms, this.roomMetas, this.allClients);
-    return new Response(null, { status: 101, webSocket: client });
-  }
-}
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-
     if (url.pathname === '/signal') {
       const upgrade = request.headers.get('Upgrade');
       if (upgrade !== 'websocket') return new Response('Expected WebSocket', { status: 426 });
-      if (env && env.SIGNAL_ROOM) {
-        try {
-          const id = env.SIGNAL_ROOM.idFromName('global');
-          const stub = env.SIGNAL_ROOM.get(id);
-          return stub.fetch(request);
-        } catch (e) { console.error('DO fail:', e); }
-      }
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
       server.accept();
       bindWs(server, new Map(), new Map(), new Set());
       return new Response(null, { status: 101, webSocket: client });
     }
-
-    if (url.pathname === '/do-test') {
-      let doOk = false, doErr = '', keys = '';
-      try { keys = Object.keys(env || {}).join(','); } catch {}
-      if (env && env.SIGNAL_ROOM) { try { const id = env.SIGNAL_ROOM.idFromName('test'); env.SIGNAL_ROOM.get(id); doOk = true; } catch (e) { doErr = e.message || String(e); } }
-      return new Response(JSON.stringify({ durableObject: doOk ? 'available' : 'unavailable', error: doErr, envKeys: keys }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
     return env.ASSETS.fetch(request);
   }
 };

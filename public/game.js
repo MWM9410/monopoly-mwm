@@ -56,6 +56,8 @@ const socket = {
   const lobby = $('lobby');
   //const signalUrlInput = $('signalUrlInput');
   const createRoomBtn = $('createRoomBtn');
+  const roomCodeInput = $('roomCodeInput');
+  const joinRoomBtn = $('joinRoomBtn');
   const roomListEl = $('roomList');
   const connectStatus = $('connectStatus');
   const roomCodeDisplay = $('roomCodeDisplay');
@@ -83,6 +85,16 @@ const socket = {
     } catch (e) {}
     return _autoSignalUrl;
   }
+
+  // URL hash 中的房间码自动加入
+  (function checkHashRoom() {
+    const match = location.hash.match(/room=([A-Z0-9]{5})/i);
+    if (match) {
+      const code = match[1].toUpperCase();
+      roomCodeInput.value = code;
+      setStatus('检测到房间码: ' + code + '，点击"加入"');
+    }
+  })();
 
   function setStatus(msg, isError) {
     connectStatus.textContent = msg;
@@ -119,10 +131,12 @@ const socket = {
   }
 
   // ── 加入房间 ──
+  let _joinRetries = 0;
   async function joinRoom(code) {
     setStatus('正在加入房间...');
     try {
       const channel = await GameNet.joinRoom(getSignalUrl(), code);
+      _joinRetries = 0;
       setStatus('已连接到主机');
 
       const clientSocket = {
@@ -157,9 +171,31 @@ const socket = {
       }, 100);
 
     } catch(e) {
-      setStatus('加入房间失败: ' + e.message, true);
+      const msg = e.message || '';
+      if (msg.includes('room_not_found') && _joinRetries < 3) {
+        _joinRetries++;
+        setStatus('房间未找到，正在重试(' + _joinRetries + '/3)...', true);
+        await new Promise(r => setTimeout(r, 2000));
+        return joinRoom(code);
+      }
+      if (msg.includes('room_not_found')) {
+        setStatus('房间未找到。请确认房间码正确，或让房主重新创建房间。', true);
+      } else {
+        setStatus('加入房间失败: ' + msg, true);
+      }
     }
   }
+
+  // 手动输入房间码加入
+  joinRoomBtn.addEventListener('click', () => {
+    const code = roomCodeInput.value.trim().toUpperCase();
+    if (code.length !== 5) { setStatus('请输入5位房间码', true); return; }
+    location.hash = 'room=' + code;
+    joinRoom(code);
+  });
+  roomCodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') joinRoomBtn.click();
+  });
 
   // ── 创建房间 ──
   createRoomBtn.addEventListener('click', async () => {
@@ -169,6 +205,7 @@ const socket = {
       currentHost = await GameNet.createHost(getSignalUrl());
       console.log('[DEBUG] Room created:', currentHost.roomCode);
 
+      location.hash = 'room=' + currentHost.roomCode;
       roomCodeDisplay.textContent = '房间码: ' + currentHost.roomCode;
       setStatus('等待玩家加入...');
 

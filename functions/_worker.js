@@ -1,10 +1,3 @@
 export async function onRequest(context) {
-  const { request } = context;
-  const url = new URL(request.url);
-  
-  if (url.pathname === '/_test') {
-    return new Response('_worker.js OK', { status: 200 });
-  }
-  
-  return context.next();
+  return new Response('_worker.js alive! path=' + context.request.url, { status: 200 });
 }

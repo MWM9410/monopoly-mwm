@@ -1,10 +1,2 @@
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-
-[[durable_objects.bindings]]
-name = "SIGNAL_ROOM"
-class_name = "SignalRoom"
-
-[[migrations]]
-tag = "v1"
-new_classes = ["SignalRoom"]

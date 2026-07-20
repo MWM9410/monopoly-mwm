@@ -54,50 +54,35 @@ const socket = {
 
   const connectScreen = $('connectScreen');
   const lobby = $('lobby');
-  const signalUrlInput = $('signalUrlInput');
+  //const signalUrlInput = $('signalUrlInput');
   const createRoomBtn = $('createRoomBtn');
   const roomListEl = $('roomList');
   const connectStatus = $('connectStatus');
   const roomCodeDisplay = $('roomCodeDisplay');
 
-  // 根据当前页面地址自动推断信号服务器地址
-  // 例如页面在 http://192.168.110.68:8080 打开 → ws://192.168.110.68:3001
-  // Cloudflare Pages 部署时使用默认的 Worker 地址
-  (function initSignalUrl() {
-    try {
-      const loc = new URL(location.href);
-      if (loc.hostname && loc.hostname !== 'localhost' && loc.hostname !== '127.0.0.1') {
-        // Cloudflare Pages 部署 → 同域下的 Pages Function (/signal)
-        if (loc.hostname.endsWith('pages.dev') || loc.hostname.endsWith('workers.dev')) {
-          signalUrlInput.value = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.hostname + '/signal';
-        } else {
-          // 本地局域网：用页面同 host，端口 3001
-          const proto = (loc.protocol === 'https:' ? 'wss://' : 'ws://');
-          const port = loc.port === '8080' ? '3001' : (loc.port || (proto === 'wss://' ? '443' : '80'));
-          signalUrlInput.value = proto + loc.hostname + ':' + port;
-        }
-        signalUrlInput.placeholder = '信号服务器地址（默认 ' + signalUrlInput.value + '）';
-      }
-    } catch (e) {}
-  })();
+  // 自动推断信号服务器地址（同域 /signal）
+  let _autoSignalUrl = '';
+  try {
+    const loc = new URL(location.href);
+    if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+      const port = loc.port || '80';
+      _autoSignalUrl = 'ws://' + loc.hostname + ':' + port;
+    } else {
+      _autoSignalUrl = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.hostname + '/signal';
+    }
+  } catch (e) { _autoSignalUrl = 'ws://localhost:3001'; }
 
   let roomWatcher = null;
   let currentHost = null;
 
   function getSignalUrl() {
-    // URL 参数 ?signal= 优先（部署时用）
     try {
       const params = new URLSearchParams(location.search);
       const sig = params.get('signal');
       if (sig) return sig.trim();
     } catch (e) {}
-    let url = (signalUrlInput.value || 'ws://localhost:3001').trim();
-    // 协议补全：用户可能只填域名
-    if (!/^wss?:\/\//.test(url)) {
-      // 生产环境（非 localhost）默认用 wss
-      const useWss = !/localhost|127\.0\.0\.1|192\.168\./.test(url);
-      url = (useWss ? 'wss://' : 'ws://') + url;
-    }
+    return _autoSignalUrl;
+  }
     // 生产环境强制 wss（HTTPS 页面不允许 ws）
     if (url.startsWith('ws://') && !/localhost|127\.0\.0\.1|192\.168\./.test(url)) {
       url = 'wss://' + url.slice(5);
@@ -224,12 +209,6 @@ const socket = {
   // ── 启动房间列表监听 ──
   roomWatcher = GameNet.watchRooms(getSignalUrl());
   roomWatcher.on('update', (rooms) => { renderRoomList(rooms); });
-  // 信号服务器地址变化时重连
-  signalUrlInput.addEventListener('change', () => {
-    if (roomWatcher) roomWatcher.close();
-    roomWatcher = GameNet.watchRooms(getSignalUrl());
-    roomWatcher.on('update', (rooms) => { renderRoomList(rooms); });
-  });
 
 })();
 

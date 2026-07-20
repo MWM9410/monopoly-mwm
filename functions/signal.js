@@ -1,12 +1,19 @@
 // Pages Function - 信令服务器 (WebSocket)
-// 部署在 Cloudflare Pages 同域名下：wss://xxx.pages.dev/signal
+// 优先使用 Durable Object 共享状态，否则回退到进程内内存
 
 const ROOM_CODE_LENGTH = 5;
-const rooms = new Map();
-const roomMetas = new Map();
-const allClients = new Set();
 
-function generateRoomCode() {
+function send(ws, msg) {
+  try { ws.send(JSON.stringify(msg)); } catch (e) {}
+}
+
+function broadcast(members, msg, exclude = null) {
+  for (const m of members) {
+    if (m !== exclude) send(m, msg);
+  }
+}
+
+function genCode(rooms) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
   do {
@@ -16,114 +23,111 @@ function generateRoomCode() {
   return code;
 }
 
-function send(ws, msg) {
-  try { ws.send(JSON.stringify(msg)); } catch (e) {}
-}
-
-function broadcast(room, msg, exclude = null) {
-  for (const member of room.members) {
-    if (member !== exclude) send(member, msg);
+// ── 回退版本：进程内内存（无跨隔离共享） ──
+const fallbackImpl = {
+  rooms: new Map(),
+  roomMetas: new Map(),
+  allClients: new Set(),
+  getRoomList() { return Array.from(this.roomMetas.values()); },
+  syncRoomList() {
+    const list = this.getRoomList();
+    for (const ws of this.allClients) {
+      if (ws.readyState === 1) send(ws, { type: 'room_list', rooms: list });
+    }
   }
-}
+};
 
-function getRoomList() {
-  return Array.from(roomMetas.values());
-}
+function handleFallback(server) {
+  const info = { currentRoom: null, currentRole: null };
+  const ctx = fallbackImpl;
+  ctx.allClients.add(server);
+  send(server, { type: 'room_list', rooms: ctx.getRoomList() });
 
-function syncRoomList() {
-  const list = getRoomList();
-  for (const ws of allClients) send(ws, { type: 'room_list', rooms: list });
-}
-
-function handleConnection(ws) {
-  let currentRoom = null;
-  let currentRole = null;
-  allClients.add(ws);
-
-  send(ws, { type: 'room_list', rooms: getRoomList() });
-
-  ws.addEventListener('message', (event) => {
+  server.addEventListener('message', (event) => {
     let msg;
-    try { msg = JSON.parse(event.data); } catch { send(ws, { type: 'error', message: 'invalid_json' }); return; }
-
+    try { msg = JSON.parse(event.data); } catch { send(server, { type: 'error', message: 'invalid_json' }); return; }
     switch (msg.type) {
       case 'create_room': {
-        if (currentRoom) { send(ws, { type: 'error', message: 'already_in_room' }); break; }
-        const code = generateRoomCode();
-        rooms.set(code, { code, members: [ws], host: ws, meta: { playerCount: 1 } });
-        roomMetas.set(code, { code, playerCount: 1 });
-        currentRoom = code;
-        currentRole = 'host';
-        send(ws, { type: 'room_created', code });
-        syncRoomList();
+        if (info.currentRoom) { send(server, { type: 'error', message: 'already_in_room' }); break; }
+        const code = genCode(ctx.rooms);
+        ctx.rooms.set(code, { code, members: [server], host: server, meta: { playerCount: 1 } });
+        ctx.roomMetas.set(code, { code, playerCount: 1 });
+        info.currentRoom = code; info.currentRole = 'host';
+        send(server, { type: 'room_created', code });
+        ctx.syncRoomList();
         break;
       }
       case 'join_room': {
-        if (currentRoom) { send(ws, { type: 'error', message: 'already_in_room' }); break; }
-        const room = rooms.get(msg.code);
-        if (!room) { send(ws, { type: 'error', message: 'room_not_found' }); break; }
-        if (room.members.length >= 8) { send(ws, { type: 'error', message: 'room_full' }); break; }
-        room.members.push(ws);
+        if (info.currentRoom) { send(server, { type: 'error', message: 'already_in_room' }); break; }
+        const room = ctx.rooms.get(msg.code);
+        if (!room) { send(server, { type: 'error', message: 'room_not_found' }); break; }
+        if (room.members.length >= 8) { send(server, { type: 'error', message: 'room_full' }); break; }
+        room.members.push(server);
         room.meta.playerCount = room.members.length;
-        currentRoom = msg.code;
-        currentRole = 'peer';
-        send(ws, { type: 'room_joined', code: msg.code });
-        broadcast(room, { type: 'peer_joined', memberCount: room.members.length }, ws);
-        syncRoomList();
-        break;
-      }
-      case 'register_peer_id': {
-        ws._peerId = msg.peerId;
+        info.currentRoom = msg.code; info.currentRole = 'peer';
+        send(server, { type: 'room_joined', code: msg.code });
+        broadcast(room.members, { type: 'peer_joined', memberCount: room.members.length }, server);
+        ctx.syncRoomList();
         break;
       }
       case 'offer': {
-        const room = rooms.get(currentRoom);
+        const room = ctx.rooms.get(info.currentRoom);
         if (!room) break;
-        broadcast(room, { type: 'offer', sdp: msg.sdp, fromRole: currentRole });
+        broadcast(room.members, { type: 'offer', sdp: msg.sdp, fromRole: info.currentRole }, server);
         break;
       }
       case 'answer': {
-        const room = rooms.get(currentRoom);
+        const room = ctx.rooms.get(info.currentRoom);
         if (!room) break;
-        broadcast(room, { type: 'answer', sdp: msg.sdp, fromRole: currentRole });
+        broadcast(room.members, { type: 'answer', sdp: msg.sdp, fromRole: info.currentRole }, server);
         break;
       }
       case 'ice_candidate': {
-        const room = rooms.get(currentRoom);
+        const room = ctx.rooms.get(info.currentRoom);
         if (!room) break;
-        broadcast(room, { type: 'ice_candidate', candidate: msg.candidate, fromRole: currentRole });
+        broadcast(room.members, { type: 'ice_candidate', candidate: msg.candidate, fromRole: info.currentRole }, server);
         break;
       }
-      default:
-        send(ws, { type: 'error', message: 'unknown_type' });
     }
   });
 
-  ws.addEventListener('close', () => {
-    allClients.delete(ws);
-    if (currentRoom && rooms.has(currentRoom)) {
-      const room = rooms.get(currentRoom);
-      room.members = room.members.filter(m => m !== ws);
+  server.addEventListener('close', () => {
+    ctx.allClients.delete(server);
+    if (info.currentRoom && ctx.rooms.has(info.currentRoom)) {
+      const room = ctx.rooms.get(info.currentRoom);
+      room.members = room.members.filter(m => m !== server);
       room.meta.playerCount = room.members.length;
       if (room.members.length === 0) {
-        rooms.delete(currentRoom);
-        roomMetas.delete(currentRoom);
-      } else if (room.host === ws) {
-        broadcast(room, { type: 'host_disconnected' });
-        rooms.delete(currentRoom);
-        roomMetas.delete(currentRoom);
+        ctx.rooms.delete(info.currentRoom);
+        ctx.roomMetas.delete(info.currentRoom);
+      } else if (room.host === server) {
+        broadcast(room.members, { type: 'host_disconnected' });
+        ctx.rooms.delete(info.currentRoom);
+        ctx.roomMetas.delete(info.currentRoom);
       } else {
-        broadcast(room, { type: 'peer_left', memberCount: room.members.length });
+        broadcast(room.members, { type: 'peer_left', memberCount: room.members.length });
       }
-      syncRoomList();
+      ctx.syncRoomList();
     }
   });
-
-  ws.addEventListener('error', () => { allClients.delete(ws); });
+  server.addEventListener('error', () => { ctx.allClients.delete(server); });
 }
 
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
+
+  // 尝试使用 Durable Object（跨隔离共享状态）
+  if (env && env.SIGNAL_ROOM && typeof env.SIGNAL_ROOM.idFromName === 'function') {
+    try {
+      const id = env.SIGNAL_ROOM.idFromName('global');
+      const stub = env.SIGNAL_ROOM.get(id);
+      return stub.fetch(request);
+    } catch (e) {
+      // DO 不可用，回退
+    }
+  }
+
+  // 回退：进程内内存（同一隔离内多个连接可互通）
   const upgradeHeader = request.headers.get('Upgrade');
   if (!upgradeHeader || upgradeHeader !== 'websocket') {
     return new Response('Expected WebSocket connection', { status: 426 });
@@ -131,6 +135,6 @@ export async function onRequest(context) {
   const pair = new WebSocketPair();
   const [client, server] = Object.values(pair);
   server.accept();
-  handleConnection(server);
+  handleFallback(server);
   return new Response(null, { status: 101, webSocket: client });
 }

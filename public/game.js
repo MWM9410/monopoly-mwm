@@ -102,7 +102,7 @@ const socket = {
   // 渲染房间列表
   function renderRoomList(rooms) {
     if (!rooms || rooms.length === 0) {
-      roomListEl.innerHTML = '<div style="text-align:center;color:#666;padding:40px 0;font-size:14px;">暂无房间，点击下方创建</div>';
+      roomListEl.innerHTML = '<div style="text-align:center;color:#666;padding:40px 0;font-size:14px;">暂无房间</div>';
       return;
     }
     roomListEl.innerHTML = rooms.map(r => `

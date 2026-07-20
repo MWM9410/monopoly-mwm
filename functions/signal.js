@@ -1,15 +1,15 @@
 // Pages Function - 信令服务器 (WebSocket)
-const ROOM_CODE_LENGTH = 5;
-const rooms = new Map();
+// 简化版 - 不带 Durable Object
 const roomMetas = new Map();
+const rooms = new Map();        // 进程内 rooms
 const allClients = new Set();
 
 function send(ws, msg) { try { ws.send(JSON.stringify(msg)); } catch (e) {} }
-function broadcast(room, msg, exclude = null) { for (const m of room.members) { if (m !== exclude) send(m, msg); } }
+function broadcast(room, msg, exclude) { for (const m of room.members) { if (m !== exclude) send(m, msg); } }
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
-  do { code = ''; for (let i = 0; i < ROOM_CODE_LENGTH; i++) code += chars[Math.floor(Math.random() * chars.length)]; }
+  do { code = ''; for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)]; }
   while (rooms.has(code));
   return code;
 }
@@ -18,7 +18,7 @@ function syncRoomList() {
   for (const ws of allClients) { if (ws.readyState === 1) send(ws, { type: 'room_list', rooms: list }); }
 }
 
-function handleConnection(ws) {
+function handleWs(ws) {
   let curRoom = null, curRole = null;
   allClients.add(ws);
   send(ws, { type: 'room_list', rooms: Array.from(roomMetas.values()) });
@@ -26,6 +26,7 @@ function handleConnection(ws) {
   ws.addEventListener('message', (event) => {
     let msg;
     try { msg = JSON.parse(event.data); } catch { return; }
+    console.log('[signal] msg:', msg.type, msg.code || '');
     switch (msg.type) {
       case 'create_room': {
         if (curRoom) return;
@@ -44,6 +45,7 @@ function handleConnection(ws) {
         if (room.members.length >= 6) { send(ws, { type: 'error', message: 'room_full' }); break; }
         room.members.push(ws);
         room.meta.playerCount = room.members.length;
+        roomMetas.set(msg.code, { code: msg.code, playerCount: room.members.length });
         curRoom = msg.code; curRole = 'peer';
         send(ws, { type: 'room_joined', code: msg.code });
         broadcast(room, { type: 'peer_joined', memberCount: room.members.length }, ws);
@@ -81,6 +83,6 @@ export async function onRequest(context) {
   const pair = new WebSocketPair();
   const [client, server] = Object.values(pair);
   server.accept();
-  handleConnection(server);
+  handleWs(server);
   return new Response(null, { status: 101, webSocket: client });
 }

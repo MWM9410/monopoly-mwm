@@ -88,6 +88,10 @@ const socket = {
     connectStatus.textContent = msg;
     connectStatus.style.color = isError ? '#e94560' : '#4ecca3';
   }
+  function updateLobbyTopBar(roomCode, count) {
+    $('#lobbyRoomCode').textContent = '房间: ' + (roomCode || '--');
+    $('#lobbyPlayerCount').textContent = (count || 0) + '/6 人';
+  }
   function showLobby() {
     connectScreen.style.display = 'none';
     lobby.classList.remove('hidden');
@@ -103,7 +107,7 @@ const socket = {
       <div class="room-card" data-code="${r.code}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#16213e;border-radius:10px;cursor:pointer;border:1px solid #0f3460;transition:border-color 0.2s;"
            onmouseover="this.style.borderColor='#e94560'" onmouseout="this.style.borderColor='#0f3460'">
         <span style="flex:1;font-size:18px;font-weight:bold;letter-spacing:2px;color:#fff;">${r.code}</span>
-        <span style="color:#888;font-size:14px;">👤 ${r.playerCount}/8</span>
+        <span style="color:#888;font-size:14px;">👤 ${r.playerCount}/6</span>
       </div>
     `).join('');
     // 点击房间加入
@@ -137,12 +141,14 @@ const socket = {
           const savedName = localStorage.getItem('monopoly_player_name');
           const me = data.find(p => p.name === savedName);
           if (me) { clientSocket.id = me.id; socket.id = me.id; }
+          updateLobbyTopBar(code, data.length);
         }
         const handlers = clientSocket._handlers[event] || [];
         for (const h of handlers) h(data);
       });
 
       showLobby();
+      updateLobbyTopBar(code, 1);
       setTimeout(() => {
         const handlers = clientSocket._handlers['connect'] || [];
         for (const h of handlers) h();
@@ -181,8 +187,12 @@ const socket = {
           for (const h of handlers) h(data);
         }
         showLobby();
+        updateLobbyTopBar(currentHost.roomCode, 1 + currentHost.peerCount);
         roomCodeDisplay.textContent = '房间码: ' + currentHost.roomCode;
-        currentHost.on('peer_connected', () => setStatus('新玩家已加入！'));
+        currentHost.on('peer_connected', () => {
+          setStatus('新玩家已加入！');
+          updateLobbyTopBar(currentHost.roomCode, 1 + currentHost.peerCount);
+        });
         console.log('[DEBUG] Will fire connect in 100ms');
         setTimeout(() => {
           const handlers = hostSocket._handlers['connect'] || [];

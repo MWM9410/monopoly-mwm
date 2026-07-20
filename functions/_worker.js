@@ -41,6 +41,7 @@ function addWsHandler(server, rooms, roomMetas, allClients) {
         if (info.currentRoom) return;
         const room = rooms.get(msg.code);
         if (!room) { send(server, { type: 'error', message: 'room_not_found' }); break; }
+        if (room.members.length >= 6) { send(server, { type: 'error', message: 'room_full' }); break; }
         room.members.push(server);
         room.meta.playerCount = room.members.length;
         info.currentRoom = msg.code; info.currentRole = 'peer';

@@ -67,9 +67,9 @@ const socket = {
     try {
       const loc = new URL(location.href);
       if (loc.hostname && loc.hostname !== 'localhost' && loc.hostname !== '127.0.0.1') {
-        // Cloudflare Pages/Woker 部署 → 使用默认 Worker 地址
+        // Cloudflare Pages 部署 → 同域下的 Pages Function (/signal)
         if (loc.hostname.endsWith('pages.dev') || loc.hostname.endsWith('workers.dev')) {
-          signalUrlInput.value = 'wss://monopoly-signal.229344154.workers.dev';
+          signalUrlInput.value = (loc.protocol === 'https:' ? 'wss://' : 'ws://') + loc.hostname + '/signal';
         } else {
           // 本地局域网：用页面同 host，端口 3001
           const proto = (loc.protocol === 'https:' ? 'wss://' : 'ws://');

@@ -94,6 +94,15 @@ export default {
       return new Response(null, { status: 101, webSocket: client });
     }
 
+    if (url.pathname === '/do-test') {
+      let doOk = false, doErr = '', keys = '';
+      try { keys = Object.keys(env || {}).join(','); } catch {}
+      if (env && env.SIGNAL_ROOM) { try { const id = env.SIGNAL_ROOM.idFromName('test'); env.SIGNAL_ROOM.get(id); doOk = true; } catch (e) { doErr = e.message || String(e); } }
+      return new Response(JSON.stringify({ durableObject: doOk ? 'available' : 'unavailable', error: doErr, envKeys: keys }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     return env.ASSETS.fetch(request);
   }
 };

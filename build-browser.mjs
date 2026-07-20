@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, writeFileSync, cpSync, existsSync, mkdirSync } from 'fs';
+import { resolve, join } from 'path';
 
 const serverPath = resolve('server.js');
 const mingziPath = resolve('mingzi.txt');
@@ -41,6 +41,14 @@ if (ioRe.test(server)) {
 
 // Step 5: Add engine ready marker
 server += '\n\nwindow.__gameEngineReady = true;\n';
+
+// Step 6: Copy drawable/ to public/drawable/ (Cloudflare Pages 需要)
+const drawableSrc = resolve('drawable');
+const drawableDest = resolve('public/drawable');
+if (existsSync(drawableSrc)) {
+  cpSync(drawableSrc, drawableDest, { recursive: true, force: true });
+  console.log('✓ Copied drawable/ to public/drawable/');
+}
 
 writeFileSync(outputPath, server, 'utf-8');
 console.log(`✓ Generated ${outputPath} (${server.length} bytes)`);

@@ -4,4 +4,4 @@ ffmpeg/
 temp_saved_game.json
 *.log
 *.zip
-public/drawable/
+# public/drawable/ 已提交 git，构建时由 build-browser.mjs 同步覆盖

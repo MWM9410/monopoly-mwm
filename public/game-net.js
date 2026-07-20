@@ -174,27 +174,33 @@ const GameNet = {
 
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
+        console.log('[Join] msg:', msg.type, msg);
         switch (msg.type) {
           case 'room_joined': {
+            console.log('[Join] room_joined, starting WebRTC...');
             rtcPC = new RTCPeerConnection(C.RTC_CONFIG);
             const dc = rtcPC.createDataChannel('game');
             dc.onopen = () => {
+              console.log('[Join] DataChannel open!');
               const ch = new WebRtcChannel(dc);
               result.emit = (ev, data) => ch.emit(ev, data);
               ch.on('*', (ev, data) => emitter._emitAll(ev, data));
               emitter._emit('ready');
               if (!resolved) { resolved = true; resolve(result); }
             };
+            dc.onerror = (err) => console.error('[Join] DC error:', err);
             rtcPC.onicecandidate = (ev) => {
               if (ev.candidate) ws.send(JSON.stringify({ type: 'ice_candidate', candidate: ev.candidate }));
             };
+            rtcPC.oniceconnectionstatechange = () => console.log('[Join] ICE state:', rtcPC.iceConnectionState);
             rtcPC.createOffer()
               .then(offer => rtcPC.setLocalDescription(offer))
-              .then(() => ws.send(JSON.stringify({ type: 'offer', sdp: rtcPC.localDescription })));
+              .then(() => ws.send(JSON.stringify({ type: 'offer', sdp: rtcPC.localDescription })))
+              .catch(err => { console.error('[Join] createOffer error:', err); if (!resolved) reject(err); });
             break;
           }
           case 'answer': {
-            if (rtcPC && msg.sdp) rtcPC.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            if (rtcPC && msg.sdp) rtcPC.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(err => console.error('[Join] setRemote error:', err));
             break;
           }
           case 'ice_candidate': {
@@ -202,6 +208,11 @@ const GameNet = {
             break;
           }
           case 'host_disconnected': emitter._emit('host_disconnected'); break;
+          case 'error': {
+            console.error('[Join] Server error:', msg.message);
+            if (!resolved) reject(new Error(msg.message || '服务器错误'));
+            break;
+          }
         }
       };
 

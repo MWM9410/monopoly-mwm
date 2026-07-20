@@ -89,8 +89,8 @@ const socket = {
     connectStatus.style.color = isError ? '#e94560' : '#4ecca3';
   }
   function updateLobbyTopBar(roomCode, count) {
-    $('#lobbyRoomCode').textContent = '房间: ' + (roomCode || '--');
-    $('#lobbyPlayerCount').textContent = (count || 0) + '/6 人';
+    $('#lobbyRoomCode').textContent = roomCode || '--';
+    $('#lobbyPlayerCount').textContent = '👤 ' + (count || 0) + '/6';
   }
   function showLobby() {
     connectScreen.style.display = 'none';
@@ -187,7 +187,7 @@ const socket = {
           for (const h of handlers) h(data);
         }
         showLobby();
-        updateLobbyTopBar(currentHost.roomCode, 1 + currentHost.peerCount);
+        updateLobbyTopBar(currentHost.roomCode, 1);
         roomCodeDisplay.textContent = '房间码: ' + currentHost.roomCode;
         currentHost.on('peer_connected', () => {
           setStatus('新玩家已加入！');
@@ -212,7 +212,14 @@ const socket = {
 
   // ── 启动房间列表监听 ──
   roomWatcher = GameNet.watchRooms(getSignalUrl());
-  roomWatcher.on('update', (rooms) => { renderRoomList(rooms); });
+  roomWatcher.on('update', (rooms) => {
+    renderRoomList(rooms);
+    // 如果在 lobby 中，同步更新顶部栏
+    if (currentHost && currentHost.roomCode) {
+      const myRoom = rooms.find(r => r.code === currentHost.roomCode);
+      if (myRoom) updateLobbyTopBar(myRoom.code, myRoom.playerCount);
+    }
+  });
 
 })();
 
